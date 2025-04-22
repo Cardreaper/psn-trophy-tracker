@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSN Trophy Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.2/babel.min.js"></script>
+    <script src="https://unpkg.com/axios@1.6.2/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-blue-900 min-h-screen">
+    <div id="root" class="container mx-auto p-6 max-w-5xl"></div>
+    <script type="text/babel">
+        console.log('Iniciando renderização do React...');
+
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            console.log('Componente App carregado');
+            const [tab, setTab] = useState('totals');
+            const [data, setData] = useState({
+                totals: { platinum: 0, gold: 0, silver: 0, bronze: 0 },
+                progress: [],
+                platinum_games: [],
+                suggestions: []
+            });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [suggestionStatus, setSuggestionStatus] = useState(() => {
+                const saved = localStorage.getItem('suggestionStatus');
+                return saved ? JSON.parse(saved) : {};
+            });
+
+            const fetchData = async () => {
+                console.log('Buscando dados da API...');
+                setLoading(true);
+                setError(null);
+                try {
+                    const response = await axios.get('http://localhost:5000/api/data');
+                    console.log('Dados recebidos:', response.data);
+                    setData(response.data);
+                } catch (err) {
+                    console.error('Erro ao buscar dados:', err);
+                    setError('Erro ao carregar dados. Verifique se o backend está rodando em http://localhost:5000.');
+                }
+                setLoading(false);
+            };
+
+            useEffect(() => {
+                console.log('Executando useEffect para buscar dados iniciais');
+                fetchData();
+            }, []);
+
+            // Salvar suggestionStatus no localStorage
+            useEffect(() => {
+                localStorage.setItem('suggestionStatus', JSON.stringify(suggestionStatus));
+                console.log('suggestionStatus salvo:', suggestionStatus);
+            }, [suggestionStatus]);
+
+            // Manipular interações com sugestões
+            const handleSuggestionAction = async (title, action) => {
+                setSuggestionStatus(prev => {
+                    const newStatus = { ...prev };
+                    if (action === 'interested') {
+                        newStatus[title] = { ...newStatus[title], interested: !newStatus[title]?.interested };
+                    } else if (action === 'notInterested') {
+                        newStatus[title] = { ...newStatus[title], notInterested: !newStatus[title]?.notInterested };
+                    } else if (action === 'wishlist') {
+                        newStatus[title] = { ...newStatus[title], wishlist: !newStatus[title]?.wishlist };
+                    }
+                    return newStatus;
+                });
+
+                if (action === 'interested' && !suggestionStatus[title]?.interested) {
+                    try {
+                        await axios.post('http://localhost:5000/api/interested', { title });
+                        console.log(`Jogo '${title}' enviado como Interessado para o backend`);
+                        fetchData(); // Atualizar sugestões com base no novo Like
+                    } catch (err) {
+                        console.error(`Erro ao enviar '${title}' para /api/interested:`, err);
+                        setError('Erro ao salvar jogo favorito. Tente novamente.');
+                    }
+                }
+            };
+
+            // Formatar troféus com imagens
+            const formatTrophies = (trophies) => {
+                console.log('Formatando troféus:', trophies);
+                return (
+                    <span>
+                        {trophies.split(', ').map((part, index) => {
+                            let icon;
+                            if (part.includes('P')) {
+                                icon = <img src="https://i.psnprofiles.com/guides/18274/470bd2.png" alt="Platina" className="w-4 h-4 inline-block mr-1" onError={(e) => {
+                                    console.error('Erro ao carregar ícone Platina');
+                                    e.target.src = 'https://via.placeholder.com/16?text=P';
+                                }} />;
+                            } else if (part.includes('G')) {
+                                icon = <img src="https://i.psnprofiles.com/guides/18274/7186c5.png" alt="Ouro" className="w-4 h-4 inline-block mr-1" onError={(e) => {
+                                    console.error('Erro ao carregar ícone Ouro');
+                                    e.target.src = 'https://via.placeholder.com/16?text=G';
+                                }} />;
+                            } else if (part.includes('S')) {
+                                icon = <img src="https://i.psnprofiles.com/guides/18274/f179ed.png" alt="Prata" className="w-4 h-4 inline-block mr-1" onError={(e) => {
+                                    console.error('Erro ao carregar ícone Prata');
+                                    e.target.src = 'https://via.placeholder.com/16?text=S';
+                                }} />;
+                            } else if (part.includes('B')) {
+                                icon = <img src="https://i.psnprofiles.com/guides/18274/e61e35.png" alt="Bronze" className="w-4 h-4 inline-block mr-1" onError={(e) => {
+                                    console.error('Erro ao carregar ícone Bronze');
+                                    e.target.src = 'https://via.placeholder.com/16?text=B';
+                                }} />;
+                            }
+                            return (
+                                <span key={index}>
+                                    {icon} {part.replace(/[PGSB]/, '')}
+                                    {index < 3 && ' | '}
+                                </span>
+                            );
+                        })}
+                    </span>
+                );
+            };
+
+            return (
+                <div className="bg-gray-800 rounded-xl shadow-2xl p-6">
+                    <div className="flex justify-center mb-6">
+                        <img
+                            src="https://www.shareicon.net/data/256x256/2015/09/11/99200_playstation_512x512.png"
+                            alt="PlayStation Logo"
+                            className="max-w-xs w-full h-auto"
+                            onError={(e) => {
+                                console.error('Erro ao carregar logo da PlayStation');
+                                e.target.src = 'https://via.placeholder.com/200x50?text=PlayStation';
+                            }}
+                        />
+                    </div>
+                    <h1 className="text-4xl font-bold text-center mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
+                        <i className="fas fa-trophy mr-2"></i> PSN Trophy Tracker
+                    </h1>
+                    <div className="flex flex-wrap gap-4 mb-6 justify-center">
+                        <button
+                            className={`flex items-center px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                tab === 'totals' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                            }`}
+                            onClick={() => setTab('totals')}
+                        >
+                            <i className="fas fa-medal mr-2"></i> Troféus Totais
+                        </button>
+                        <button
+                            className={`flex items-center px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                tab === 'progress' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                            }`}
+                            onClick={() => setTab('progress')}
+                        >
+                            <i className="fas fa-gamepad mr-2"></i> Em Progresso
+                        </button>
+                        <button
+                            className={`flex items-center px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                tab === 'suggestions' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                            }`}
+                            onClick={() => setTab('suggestions')}
+                        >
+                            <i className="fas fa-star mr-2"></i> Sugestões
+                        </button>
+                    </div>
+
+                    {loading && (
+                        <p className="text-center text-blue-400">
+                            <i className="fas fa-spinner fa-spin mr-2"></i> Carregando...
+                        </p>
+                    )}
+                    {error && <p className="text-center text-red-500">{error}</p>}
+                    {!loading && !error && !data.totals && (
+                        <p className="text-center text-yellow-500">
+                            Nenhum dado carregado. Clique em "Atualizar Dados" para tentar novamente.
+                        </p>
+                    )}
+
+                    {tab === 'totals' && (
+                        <div>
+                            <h2 className="text-2xl font-bold mb-4 text-blue-300">Troféus Totais</h2>
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse bg-gray-900 rounded-lg shadow-lg">
+                                    <thead>
+                                        <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                                            <th className="border border-gray-700 p-3 rounded-tl-lg">
+                                                <img src="https://i.psnprofiles.com/guides/18274/470bd2.png" alt="Platina" className="w-4 h-4 inline-block mr-1" onError={(e) => e.target.src = 'https://via.placeholder.com/16?text=P'} /> Platina
+                                            </th>
+                                            <th className="border border-gray-700 p-3">
+                                                <img src="https://i.psnprofiles.com/guides/18274/7186c5.png" alt="Ouro" className="w-4 h-4 inline-block mr-1" onError={(e) => e.target.src = 'https://via.placeholder.com/16?text=G'} /> Ouro
+                                            </th>
+                                            <th className="border border-gray-700 p-3">
+                                                <img src="https://i.psnprofiles.com/guides/18274/f179ed.png" alt="Prata" className="w-4 h-4 inline-block mr-1" onError={(e) => e.target.src = 'https://via.placeholder.com/16?text=S'} /> Prata
+                                            </th>
+                                            <th className="border border-gray-700 p-3 rounded-tr-lg">
+                                                <img src="https://i.psnprofiles.com/guides/18274/e61e35.png" alt="Bronze" className="w-4 h-4 inline-block mr-1" onError={(e) => e.target.src = 'https://via.placeholder.com/16?text=B'} /> Bronze
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr className="hover:bg-gray-700 transition-colors">
+                                            <td className="border border-gray-700 p-3 text-center">{data.totals.platinum}</td>
+                                            <td className="border border-gray-700 p-3 text-center">{data.totals.gold}</td>
+                                            <td className="border border-gray-700 p-3 text-center">{data.totals.silver}</td>
+                                            <td className="border border-gray-700 p-3 text-center">{data.totals.bronze}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            {data.platinum_games.length > 0 && (
+                                <div className="mt-6">
+                                    <h3 className="text-xl font-bold mb-2 text-blue-300">Jogos Platinados</h3>
+                                    <ul className="list-disc list-inside text-gray-200">
+                                        {data.platinum_games.map((game, index) => (
+                                            <li key={index} className="py-1">
+                                                <img src="https://i.psnprofiles.com/guides/18274/470bd2.png" alt="Platina" className="w-4 h-4 inline-block mr-1" onError={(e) => {
+                                                    console.error('Erro ao carregar ícone Platina (lista)');
+                                                    e.target.src = 'https://via.placeholder.com/16?text=P';
+                                                }} /> {game}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {tab === 'progress' && (
+                        <div>
+                            <h2 className="text-2xl font-bold mb-4 text-blue-300">Em Progresso</h2>
+                            {data.progress.length === 0 ? (
+                                <p className="text-gray-400 text-center">Nenhum jogo em progresso encontrado.</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse bg-gray-900 rounded-lg shadow-lg">
+                                        <thead>
+                                            <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                                                <th className="border border-gray-700 p-3 rounded-tl-lg">Jogo</th>
+                                                <th className="border border-gray-700 p-3">Progresso</th>
+                                                <th className="border border-gray-700 p-3 rounded-tr-lg">Troféus</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {data.progress.map((game, index) => (
+                                                <tr key={index} className="hover:bg-gray-700 transition-colors">
+                                                    <td className="border border-gray-700 p-3">{game.title}</td>
+                                                    <td className="border border-gray-700 p-3 text-center">{game.progress}%</td>
+                                                    <td className="border border-gray-700 p-3">{formatTrophies(game.earned_trophies)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {tab === 'suggestions' && (
+                        <div>
+                            <h2 className="text-2xl font-bold mb-4 text-blue-300">Sugestões para Próximas Platinas</h2>
+                            {data.suggestions.length === 0 ? (
+                                <p className="text-gray-400 text-center">Nenhuma sugestão disponível no momento.</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse bg-gray-900 rounded-lg shadow-lg">
+                                        <thead>
+                                            <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                                                <th className="border border-gray-700 p-3 rounded-tl-lg">Jogo</th>
+                                                <th className="border border-gray-700 p-3">Gênero</th>
+                                                <th className="border border-gray-700 p-3 rounded-tr-lg">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {data.suggestions
+                                                .filter(game => !suggestionStatus[game.title]?.notInterested)
+                                                .map((game, index) => (
+                                                    <tr key={index} className="hover:bg-gray-700 transition-colors">
+                                                        <td className="border border-gray-700 p-3">{game.title}</td>
+                                                        <td className="border border-gray-700 p-3">{game.genre}</td>
+                                                        <td className="border border-gray-700 p-3 flex gap-2 justify-center">
+                                                            <button
+                                                                className={`p-1 rounded-full ${
+                                                                    suggestionStatus[game.title]?.interested
+                                                                        ? 'text-green-500'
+                                                                        : 'text-gray-400 hover:text-green-400'
+                                                                }`}
+                                                                title="Interessado"
+                                                                onClick={() => handleSuggestionAction(game.title, 'interested')}
+                                                            >
+                                                                <i className="fas fa-thumbs-up"></i>
+                                                            </button>
+                                                            <button
+                                                                className={`p-1 rounded-full ${
+                                                                    suggestionStatus[game.title]?.notInterested
+                                                                        ? 'text-red-500'
+                                                                        : 'text-gray-400 hover:text-red-400'
+                                                                }`}
+                                                                title="Não Interessado"
+                                                                onClick={() => handleSuggestionAction(game.title, 'notInterested')}
+                                                            >
+                                                                <i className="fas fa-thumbs-down"></i>
+                                                            </button>
+                                                            <button
+                                                                className={`p-1 rounded-full ${
+                                                                    suggestionStatus[game.title]?.wishlist
+                                                                        ? 'text-yellow-500'
+                                                                        : 'text-gray-400 hover:text-yellow-400'
+                                                                }`}
+                                                                title="Adicionar à Lista de Desejos"
+                                                                onClick={() => handleSuggestionAction(game.title, 'wishlist')}
+                                                            >
+                                                                <i className="fas fa-star"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            {Object.values(suggestionStatus).some(status => status.wishlist) && (
+                                <div className="mt-6">
+                                    <h3 className="text-xl font-bold mb-2 text-blue-300">Lista de Desejos</h3>
+                                    <ul className="list-disc list-inside text-gray-200">
+                                        {data.suggestions
+                                            .filter(game => suggestionStatus[game.title]?.wishlist)
+                                            .map((game, index) => (
+                                                <li key={index} className="py-1">
+                                                    {game.title} ({game.genre})
+                                                </li>
+                                            ))}
+                                    </ul>
+                                </div>
+                            )}
+                            {Object.values(suggestionStatus).some(status => status.interested) && (
+                                <div className="mt-6">
+                                    <h3 className="text-xl font-bold mb-2 text-blue-300">Jogos Favoritos</h3>
+                                    <ul className="list-disc list-inside text-gray-200">
+                                        {data.suggestions
+                                            .filter(game => suggestionStatus[game.title]?.interested)
+                                            .map((game, index) => (
+                                                <li key={index} className="py-1">
+                                                    {game.title} ({game.genre})
+                                                </li>
+                                            ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="text-center mt-6">
+                        <button
+                            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-300 flex items-center mx-auto"
+                            onClick={fetchData}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <>
+                                    <i className="fas fa-spinner fa-spin mr-2"></i> Atualizando...
+                                </>
+                            ) : (
+                                <>
+                                    <i className="fas fa-sync-alt mr-2"></i> Atualizar Dados
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        try {
+            console.log('Tentando renderizar o componente App');
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+            console.log('Componente App renderizado com sucesso');
+        } catch (error) {
+            console.error('Erro ao renderizar o componente:', error);
+            document.getElementById('root').innerHTML = `
+                <div class="text-center text-red-500 p-6">
+                    <h1>Erro ao carregar a aplicação</h1>
+                    <p>Por favor, verifique o console do navegador (F12) para mais detalhes.</p>
+                    <p>Erro: ${error.message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

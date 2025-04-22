@@ -1,0 +1,14 @@
+Como obter o NPSSO para o programa:
+
+1. Abra um navegador (ex.: Chrome, Firefox), de preferência em uma aba anônima.
+2. Acesse https://www.playstation.com/ e clique em "Sign In".
+3. Faça login com seu e-mail e senha da PSN.
+4. Se tiver autenticação de dois fatores (2FA), insira o código enviado por SMS ou app.
+5. Após logar, abra uma nova aba no MESMO navegador.
+6. Acesse https://ca.account.sony.com/api/v1/ssocookie
+7. Você verá um texto como: {"npsso":"abcdefghijklmnopqrstuvwxyz1234567890..."}
+8. Copie apenas o valor do campo "npsso" (a string longa, sem aspas).
+9. Cole no programa quando solicitado ou adicione ao arquivo config.json.
+10. Repita este processo a cada ~60 dias, quando o NPSSO expirar.
+
+AVISO: Nunca compartilhe seu NPSSO publicamente. Ele é como uma senha.
